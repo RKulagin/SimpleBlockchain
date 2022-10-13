@@ -7,4 +7,4 @@
 
 ```shell script
 Copyright 2022, Ruslan Kulagin
-```  
+``` 

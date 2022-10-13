@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 #include <iomanip>
+#include <future>
+#include <iostream>
 
 class TBlockchain {
 public:
@@ -54,34 +56,66 @@ private:
                                                                            nonce_(std::move(nonce)) {}
     };
 
-    static bool IsValidHash(const digest_type & hash){
+    static bool IsValidHash(const digest_type &hash) {
         return hash[hash.size() - 1] == 0 && hash[hash.size() - 2] == 0 && hash[hash.size() - 3] == 0;
+//        return hash[hash.size() - 1] == 0 && hash[hash.size() - 3] == 0;
     }
 
-    std::unique_ptr<TNode> GenerateBlock(const std::string &message, const digest_type &digest) {
-        nonce_type nonce = {0};
+    static std::unique_ptr<TNode> GenerateBlock(const std::string &message, const digest_type &digest) {
+        constexpr byte_type THREADS_NUMBER = 16;
+        std::vector<std::future<std::unique_ptr<TNode>>> futures;
+        futures.reserve(THREADS_NUMBER);
+        for (byte_type i = 0; i < THREADS_NUMBER; ++i) {
+            futures.push_back(std::async(std::launch::async, BruteNonce, message, digest, THREADS_NUMBER, i));
+        }
+        size_t i = 0;
+        while (futures[i].wait_until(std::chrono::system_clock::time_point::min()) != std::future_status::ready) {
+            i = (i + 1) % THREADS_NUMBER;
+        }
+        std::cout << i << std::endl;
+        auto result = futures[i].get();
+        futures.clear();
+        return result;
+    }
+
+    static std::unique_ptr<TNode>
+    BruteNonce(const std::string &message, const digest_type &digest, byte_type delta, byte_type init) {
+        nonce_type nonce = {init};
         std::unique_ptr<data_type> msg;
         std::vector<byte_type> hash;
         while (true) {
-            msg = GenerateMessageBytes(digest, message, nonce);
-            hash = NHash::Hash(msg->data(), msg->size());
-            if (IsValidHash(hash)) {
+            if (CheckBlock(message, digest, nonce, hash)) {
                 break;
             } else {
-                ++nonce.front();
-                for (auto it = nonce.begin(); it!= nonce.end() && *it == 0; ) {
-                    ++it;
-                    if (it == nonce.end()){
-                        nonce.push_back(0);
-                        break;
-                    }
-                    else{
-                        ++(*it);
-                    }
-                }
+                IncreaseNonce(nonce, delta);
             }
         }
         return std::make_unique<TNode>(message, hash, nonce);
+    }
+
+    static bool
+    CheckBlock(const std::string &message, const digest_type &digest, const nonce_type &nonce, digest_type &hash) {
+        const auto msg = GenerateMessageBytes(digest, message, nonce);
+        hash = NHash::Hash(msg->data(), msg->size());
+        return IsValidHash(hash);
+    }
+
+    static void IncreaseNonce(nonce_type &nonce, uint64_t delta) {
+        nonce.front() += delta;
+        if (nonce.front() < delta) {
+            if (nonce.size() == 1){
+                nonce.push_back(0);
+            }
+            for (auto it = nonce.begin() + 1; it != nonce.end() && *it == 0;) {
+                ++it;
+                if (it == nonce.end()) {
+                    nonce.push_back(0);
+                    break;
+                } else {
+                    ++(*it);
+                }
+            }
+        }
     }
 
     static inline std::unique_ptr<data_type>
