@@ -21,12 +21,16 @@ project(SimpleBlockchain VERSION 0.1.0)
 string(APPEND CMAKE_CXX_FLAGS " -pedantic -Werror -Wall -Wextra")
 string(APPEND CMAKE_CXX_FLAGS " -Wno-unused-command-line-argument")
 string(APPEND CMAKE_CXX_FLAGS " -Wshadow -Wnon-virtual-dtor")
+#string(APPEND CMAKE_CXX_FLAGS " -static -lboost_context")
 
 hunter_add_package(GTest)
 find_package(GTest CONFIG REQUIRED)
 
 hunter_add_package(OpenSSL)
 find_package(OpenSSL REQUIRED)
+
+hunter_add_package(Boost COMPONENTS fiber context)
+find_package(Boost CONFIG REQUIRED fiber context)
 
 add_library(${PROJECT_NAME} STATIC
         # enum your files and delete this comment
@@ -42,7 +46,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
         "$<INSTALL_INTERFACE:include>"
         )
 
-target_link_libraries(${PROJECT_NAME} OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(${PROJECT_NAME} PUBLIC OpenSSL::Crypto Boost::fiber Boost::context)
 target_link_libraries(demo ${PROJECT_NAME})
 
 if(BUILD_TESTS)

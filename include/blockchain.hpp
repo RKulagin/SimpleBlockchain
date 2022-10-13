@@ -6,6 +6,10 @@
 #include <hash.hpp>
 #include <digest.hpp>
 
+#include <boost/fiber/all.hpp>
+#include <boost/fiber/fiber.hpp>
+#include <boost/fiber/future.hpp>
+
 #include <cstdint>
 #include <string>
 #include <list>
@@ -57,19 +61,19 @@ private:
     };
 
     static bool IsValidHash(const digest_type &hash) {
-        return hash[hash.size() - 1] == 0 && hash[hash.size() - 2] == 0 && hash[hash.size() - 3] == 0;
-//        return hash[hash.size() - 1] == 0 && hash[hash.size() - 3] == 0;
+//        return hash[hash.size() - 1] == 0 && hash[hash.size() - 2] == 0 && hash[hash.size() - 3] == 0;
+        return hash[hash.size() - 1] == 0 && hash[hash.size() - 3] == 0;
     }
 
     static std::unique_ptr<TNode> GenerateBlock(const std::string &message, const digest_type &digest) {
         constexpr byte_type THREADS_NUMBER = 16;
-        std::vector<std::future<std::unique_ptr<TNode>>> futures;
+        std::vector<boost::fibers::future<std::unique_ptr<TNode>>> futures;
         futures.reserve(THREADS_NUMBER);
         for (byte_type i = 0; i < THREADS_NUMBER; ++i) {
-            futures.push_back(std::async(std::launch::async, BruteNonce, message, digest, THREADS_NUMBER, i));
+            futures.push_back(boost::fibers::async(boost::fibers::launch::post, BruteNonce, message, digest, THREADS_NUMBER, i));
         }
         size_t i = 0;
-        while (futures[i].wait_until(std::chrono::system_clock::time_point::min()) != std::future_status::ready) {
+        while (futures[i].wait_until(std::chrono::system_clock::time_point::min()) != boost::fibers::future_status::ready) {
             i = (i + 1) % THREADS_NUMBER;
         }
         std::cout << i << std::endl;
